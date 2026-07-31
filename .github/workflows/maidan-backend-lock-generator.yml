@@ -7,6 +7,12 @@ on:
     paths:
       - '.maidan-lock/package.json'
       - '.github/workflows/maidan-backend-lock-generator.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.maidan-lock/package.json'
+      - '.github/workflows/maidan-backend-lock-generator.yml'
 
 permissions:
   contents: write
@@ -17,7 +23,7 @@ concurrency:
 
 jobs:
   generate:
-    if: github.actor == 'waseem99'
+    if: github.actor == 'waseem99' && github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
