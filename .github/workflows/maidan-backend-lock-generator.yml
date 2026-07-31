@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   generate:
-    if: github.actor == 'waseem99' && github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    if: (github.event_name == 'push' && github.actor == 'waseem99') || (github.event_name == 'pull_request' && github.actor == 'waseem99' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -43,17 +43,26 @@ jobs:
           NPM_CONFIG_REGISTRY: https://registry.npmjs.org
         run: npm install --package-lock-only --legacy-peer-deps --ignore-scripts
 
-      - name: Validate and commit lockfile
+      - name: Validate clean locked install
+        working-directory: .maidan-lock
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+        run: |
+          rm -rf node_modules
+          npm ci --legacy-peer-deps
+          node -e "const p=require('./package-lock.json'); if(p.lockfileVersion!==3) process.exit(1); console.log(Object.keys(p.packages||{}).length)"
+
+      - name: Commit lockfile and validation marker
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const p=require('./.maidan-lock/package-lock.json'); if(p.lockfileVersion!==3) process.exit(1); console.log(Object.keys(p.packages||{}).length)"
+          printf 'Node 20 npm ci validated at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .maidan-lock/npm-ci-validated.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .maidan-lock/package-lock.json
+          git add .maidan-lock/package-lock.json .maidan-lock/npm-ci-validated.txt
           if git diff --cached --quiet; then
-            echo 'Lockfile already current'
+            echo 'Lockfile already current and validated'
             exit 0
           fi
-          git commit -m 'build: generate Maidan backend package lock'
+          git commit -m 'test: validate Maidan backend package lock'
           git push origin HEAD:ops/maidan-backend-lock-generator
