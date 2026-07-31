@@ -1,0 +1,53 @@
+name: Generate temporary Maidan backend lockfile
+
+on:
+  push:
+    branches:
+      - ops/maidan-backend-lock-generator
+    paths:
+      - '.maidan-lock/package.json'
+      - '.github/workflows/maidan-backend-lock-generator.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maidan-backend-lock-generator
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.actor == 'waseem99'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/maidan-backend-lock-generator
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: https://registry.npmjs.org
+
+      - name: Generate npm lockfile
+        working-directory: .maidan-lock
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+        run: npm install --package-lock-only --legacy-peer-deps --ignore-scripts
+
+      - name: Validate and commit lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const p=require('./.maidan-lock/package-lock.json'); if(p.lockfileVersion!==3) process.exit(1); console.log(Object.keys(p.packages||{}).length)"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .maidan-lock/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfile already current'
+            exit 0
+          fi
+          git commit -m 'build: generate Maidan backend package lock'
+          git push origin HEAD:ops/maidan-backend-lock-generator
